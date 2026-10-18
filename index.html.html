@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>体調から食材を提案</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@500;700;900&display=swap">
+<style>
+:root{
+  --bg:#eef3ec; --surface:#ffffff; --ink:#1f2b25; --sub:#5d6b62; --line:#cfdbd0;
+  --main:#2f6b4f; --main-ink:#ffffff; --no:#e6ece6; --accent:#e9a23b;
+  box-sizing:border-box; padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#141c17; --surface:#1d2822; --ink:#e8f0ea; --sub:#9db0a3; --line:#33443a;
+    --main:#6fbf92; --main-ink:#10241a; --no:#2a382f; --accent:#e9b25c; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#141c17; --surface:#1d2822; --ink:#e8f0ea; --sub:#9db0a3; --line:#33443a;
+  --main:#6fbf92; --main-ink:#10241a; --no:#2a382f; --accent:#e9b25c; color-scheme:dark;
+}
+*{box-sizing:border-box}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Zen Maru Gothic","Hiragino Maru Gothic ProN","Hiragino Sans","Yu Gothic",sans-serif;line-height:1.7;min-height:100vh}
+main{max-width:520px;margin:0 auto;padding:28px 20px 48px;min-height:100vh;display:flex;flex-direction:column}
+.screen{display:none;flex:1;flex-direction:column}
+.screen.on{display:flex}
+h1{font-size:34px;line-height:1.35;font-weight:900;margin:12vh 0 16px;letter-spacing:.02em}
+.lead{color:var(--sub);margin:0 0 36px}
+.btn{font:inherit;font-weight:700;font-size:20px;border:0;border-radius:18px;padding:20px 24px;cursor:pointer;width:100%;transition:transform .12s}
+.btn:active{transform:scale(.97)}
+.btn:focus-visible{outline:3px solid var(--accent);outline-offset:3px}
+.primary{background:var(--main);color:var(--main-ink)}
+.ghost{background:transparent;color:var(--main);border:2px solid var(--main)}
+.bar{height:8px;background:var(--line);border-radius:99px;overflow:hidden;margin-top:6px}
+.bar i{display:block;height:100%;width:0;background:var(--main);border-radius:99px;transition:width .3s}
+.count{font-weight:700;color:var(--sub);font-size:15px}
+.q{font-size:26px;font-weight:700;line-height:1.55;margin:9vh 0 auto}
+.answers{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:40px}
+.yes{background:var(--main);color:var(--main-ink)}
+.no{background:var(--no);color:var(--ink)}
+.summary{font-size:15px;color:var(--sub);margin:0 0 20px}
+h2{font-size:28px;font-weight:900;line-height:1.4;margin:20px 0 8px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:18px 20px;margin:14px 0}
+.card h3{margin:0 0 2px;font-size:19px}
+.card p{margin:0 0 10px;color:var(--sub);font-size:14px}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chips span{background:var(--bg);border:1px solid var(--line);border-radius:99px;padding:5px 14px;font-weight:700;font-size:16px}
+.actions{margin-top:24px;display:grid;gap:12px}
+.note{font-size:12px;color:var(--sub);margin-top:20px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<main>
+  <section class="screen on" id="start">
+    <h1>今日のからだに、<br>合う食材は？</h1>
+    <p class="lead">10問の「はい・いいえ」に答えるだけ。今の体調に合うおすすめ食材をお知らせします。</p>
+    <button class="btn primary" id="startBtn">体調から食材を提案</button>
+  </section>
+
+  <section class="screen" id="quiz">
+    <div class="count" id="count"></div>
+    <div class="bar"><i id="barFill"></i></div>
+    <div class="q" id="qText"></div>
+    <div class="answers">
+      <button class="btn yes" id="yesBtn">はい</button>
+      <button class="btn no" id="noBtn">いいえ</button>
+    </div>
+  </section>
+
+  <section class="screen" id="result">
+    <div class="summary" id="summary"></div>
+    <h2 id="resTitle"></h2>
+    <div id="resList"></div>
+    <div class="actions">
+      <button class="btn ghost" id="retryBtn">もう一度チェックする</button>
+    </div>
+    <div class="note">※ 一般的な食養生の考え方にもとづく目安です。症状が続く場合は医療機関にご相談ください。</div>
+  </section>
+</main>
+
+<script>
+const QUESTIONS = [
+  {q:"手足が冷えやすいと感じますか？", k:"cold"},
+  {q:"朝から体がだるく、疲れが抜けませんか？", k:"tired"},
+  {q:"胃がもたれる、食欲がわかないことがありますか？", k:"stomach"},
+  {q:"最近、寝つきが悪い・眠りが浅いですか？", k:"sleep"},
+  {q:"肌や喉、唇が乾燥しがちですか？", k:"dry"},
+  {q:"夕方になると足や顔がむくみますか？", k:"swell"},
+  {q:"目が疲れる、かすむと感じますか？", k:"eyes"},
+  {q:"肩や首のこりが気になりますか？", k:"stiff"},
+  {q:"イライラしたり、気分が落ち込みやすいですか？", k:"mood"},
+  {q:"お通じが滞りがち、またはお腹が張りますか？", k:"gut"}
+];
+const FOODS = {
+  cold:{name:"冷えが気になるあなたに", why:"体を内側から温める食材を。", items:["生姜","ねぎ","かぼちゃ","鶏肉"]},
+  tired:{name:"疲れがたまっているあなたに", why:"エネルギー源とビタミンB群を補給。", items:["豚肉","うなぎ","玄米","大豆"]},
+  stomach:{name:"胃腸をいたわりたいあなたに", why:"消化にやさしく、胃を整える食材を。", items:["大根","キャベツ","山芋","おかゆ"]},
+  sleep:{name:"ぐっすり眠りたいあなたに", why:"心を落ち着かせる成分を含む食材を。", items:["牛乳","バナナ","豆腐","なつめ"]},
+  dry:{name:"うるおいが足りないあなたに", why:"体にうるおいを与える食材を。", items:["白きくらげ","れんこん","梨","豆乳"]},
+  swell:{name:"むくみが気になるあなたに", why:"余分な水分の排出を助ける食材を。", items:["きゅうり","とうもろこし","はとむぎ","小豆"]},
+  eyes:{name:"目を休ませたいあなたに", why:"目の健康を支える栄養を。", items:["ブルーベリー","にんじん","ほうれん草","クコの実"]},
+  stiff:{name:"こりをほぐしたいあなたに", why:"血行を促し、筋肉をゆるめる食材を。", items:["玉ねぎ","青魚","酢","にら"]},
+  mood:{name:"気持ちを整えたいあなたに", why:"気の巡りを助け、リラックスできる食材を。", items:["柑橘類","春菊","ジャスミン茶","ミント"]},
+  gut:{name:"お腹を整えたいあなたに", why:"食物繊維と発酵食品で腸を元気に。", items:["納豆","ごぼう","さつまいも","ヨーグルト"]}
+};
+const GOOD = {name:"絶好調のあなたに", why:"今の調子をキープするバランス食材を。", items:["旬の野菜","雑穀米","わかめ","鮭"]};
+
+const $ = id => document.getElementById(id);
+let idx = 0, answers = [];
+
+function show(id){
+  document.querySelectorAll(".screen").forEach(s => s.classList.toggle("on", s.id === id));
+  window.scrollTo(0,0);
+}
+function renderQ(){
+  $("count").textContent = (idx+1) + " / " + QUESTIONS.length;
+  $("barFill").style.width = (idx / QUESTIONS.length * 100) + "%";
+  $("qText").textContent = QUESTIONS[idx].q;
+}
+function answer(yes){
+  answers.push(yes);
+  idx++;
+  if(idx < QUESTIONS.length){ renderQ(); }
+  else { $("barFill").style.width = "100%"; renderResult(); }
+}
+function card(f){
+  const chips = f.items.map(i => "<span>"+i+"</span>").join("");
+  return '<div class="card"><h3>'+f.name+'</h3><p>'+f.why+'</p><div class="chips">'+chips+'</div></div>';
+}
+function renderResult(){
+  const hits = QUESTIONS.filter((_,i) => answers[i]).map(q => q.k);
+  const n = hits.length;
+  $("summary").textContent = "10問中 " + n + " 問が「はい」でした。";
+  if(n === 0){
+    $("resTitle").textContent = "体調は良好です";
+    $("resList").innerHTML = card(GOOD);
+  } else {
+    $("resTitle").textContent = n >= 6 ? "今日はしっかりケアしましょう" : "あなたへのおすすめ食材";
+    $("resList").innerHTML = hits.map(k => card(FOODS[k])).join("");
+  }
+  show("result");
+}
+$("startBtn").onclick = () => { idx = 0; answers = []; renderQ(); show("quiz"); };
+$("yesBtn").onclick = () => answer(true);
+$("noBtn").onclick = () => answer(false);
+$("retryBtn").onclick = () => show("start");
+</script>
+</body>
+</html>
